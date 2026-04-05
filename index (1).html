@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Pluviômetro Pro | Gestão de Chuvas</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2e7d32">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Pluviômetro">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="Monitoramento de chuvas para fazendas">
+
+    <!-- PWA Icons Apple -->
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        :root {
+            --primary: #2e7d32;
+            --accent: #66bb6a;
+            --dark: #0a1a0a;
+            --card: #152a15;
+            --text: #e0e0e0;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: #0a1a0a;
+            color: var(--text);
+            margin: 0;
+            padding-bottom: 20px;
+        }
+        header {
+            padding: 18px 16px;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            border-bottom: 3px solid var(--primary);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+        header h2 { margin: 0; font-size: 18px; letter-spacing: 1.5px; color: #fff; text-transform: uppercase; }
+        header small { display: block; font-size: 10px; color: #444; margin-top: 4px; letter-spacing: 0.5px; }
+
+        /* PWA Install Banner */
+        #installBanner {
+            display: none;
+            background: linear-gradient(135deg, #1b5e20, #2e7d32);
+            padding: 12px 16px;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #4caf50;
+        }
+        #installBanner.show { display: flex; }
+        #installBanner span { flex: 1; font-size: 13px; color: #e8f5e9; }
+        #btnInstall {
+            background: #66bb6a;
+            color: #0a1a0a;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        #btnDismiss {
+            background: transparent;
+            border: none;
+            color: #aaa;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 4px;
+        }
+
+        /* Offline Banner */
+        #offlineBanner {
+            display: none;
+            background: #b71c1c;
+            padding: 8px 16px;
+            text-align: center;
+            font-size: 12px;
+            color: white;
+        }
+        #offlineBanner.show { display: block; }
+
+        .container { max-width: 700px; margin: 0 auto; padding: 12px; }
+        .card {
+            background: var(--card);
+            padding: 18px 16px;
+            border-radius: 20px;
+            margin-bottom: 18px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        h3 { color: var(--accent); margin-top: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        .nome-fazenda-group { display: flex; gap: 10px; margin-bottom: 16px; }
+        .nome-fazenda-group div { flex: 1; background: #0c1a0c; padding: 8px 12px; border-radius: 12px; }
+        .nome-fazenda-group label { font-size: 10px; font-weight: bold; color: var(--accent); display: block; margin-bottom: 4px; }
+        .nome-fazenda-group input {
+            background: transparent; border: none;
+            border-bottom: 1px solid #3a5a3a;
+            color: white; width: 100%;
+            padding: 4px 0; font-size: 14px;
+        }
+        .farm-selector { display: flex; gap: 8px; margin-bottom: 20px; }
+        .farm-btn {
+            flex: 1; background: #1f3a1f; border: none;
+            padding: 12px; border-radius: 40px;
+            color: #aaa; font-weight: bold; cursor: pointer;
+            font-size: 13px; transition: 0.3s;
+        }
+        .farm-btn.active { background: var(--primary); color: white; box-shadow: 0 0 12px rgba(102,187,106,0.4); }
+        .input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        input[type="date"], input[type="number"] {
+            background: #0c1a0c; color: white;
+            border: 1px solid #2a4b2a;
+            padding: 14px; border-radius: 14px;
+            font-size: 16px; width: 100%;
+        }
+        button.btn-main {
+            background: linear-gradient(95deg, var(--primary), #3c9e40);
+            color: white; font-weight: bold;
+            padding: 16px; border: none;
+            border-radius: 40px; width: 100%;
+            cursor: pointer; font-size: 16px; margin-bottom: 12px;
+        }
+        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+        .stat-box {
+            background: rgba(0,0,0,0.4);
+            padding: 14px; border-radius: 16px;
+            text-align: center; border: 1px solid #2a4b2a;
+        }
+        .stat-box small { font-size: 10px; color: #aaccaa; text-transform: uppercase; }
+        .stat-box b { display: block; font-size: 22px; color: var(--accent); margin-top: 5px; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn-group button {
+            flex: 1; min-width: 70px; padding: 12px;
+            border: none; border-radius: 12px;
+            color: white; font-size: 11px;
+            font-weight: bold; cursor: pointer;
+        }
+
+        /* Stats mensais extras */
+        .stats-row-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+        @media(max-width:400px) { .stats-row-4 { grid-template-columns: 1fr 1fr; } }
+        .stat-box.mini b { font-size: 16px; }
+
+        #splash {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0a1a0a;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 9999; color: white;
+        }
+        .splash-logo { font-size: 60px; margin-bottom: 16px; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.1);opacity:0.8} }
+
+        canvas { max-height: 240px; width: 100%; margin-top: 10px; }
+        footer { text-align: center; font-size: 10px; opacity: 0.4; margin-top: 20px; padding-bottom: 10px; }
+
+        /* ALERTA DATA DUPLICADA */
+        .alerta-duplicado {
+            display: none; align-items: center; gap: 10px;
+            background: linear-gradient(135deg,#4a1a00,#2a0f00);
+            border: 1px solid #ff6d00; border-radius: 14px;
+            padding: 12px 14px; margin-top: 10px;
+            animation: slideIn 0.3s ease;
+        }
+        .alerta-duplicado.show { display: flex; }
+        .alerta-icon { font-size: 22px; flex-shrink: 0; }
+        .alerta-texto { flex: 1; }
+        .alerta-titulo { font-size: 12px; font-weight: bold; color: #ff9800; text-transform: uppercase; letter-spacing: 0.5px; }
+        .alerta-desc { font-size: 12px; color: #ccc; margin-top: 2px; }
+        .alerta-valor { font-size: 13px; color: #ff9800; font-weight: bold; margin-top: 3px; }
+        .btn-substituir {
+            background: #ff6d00; border: none; color: white;
+            padding: 8px 12px; border-radius: 8px;
+            font-size: 11px; font-weight: bold;
+            cursor: pointer; white-space: nowrap; flex-shrink: 0;
+        }
+        .btn-substituir:hover { background: #e65100; }
+        @keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+        /* PDF loading overlay */
+        #pdfOverlay {
+            display: none; position: fixed;
+            top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 9998;
+            flex-direction: column;
+            justify-content: center; align-items: center;
+            color: white;
+        }
+        #pdfOverlay.show { display: flex; }
+        .pdf-spinner {
+            width: 50px; height: 50px;
+            border: 4px solid #1a331a;
+            border-top-color: #66bb6a;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<!-- PDF Loading Overlay -->
+<div id="pdfOverlay">
+    <div class="pdf-spinner"></div>
+    <p style="color:#66bb6a;font-weight:bold;margin:0">Gerando PDF com gráficos...</p>
+    <p style="color:#666;font-size:11px;margin:6px 0 0">Aguarde alguns segundos</p>
+</div>
+
+<div id="splash">
+    <div class="splash-logo">🌧️</div>
+    <h2 style="margin:0;font-size:20px;letter-spacing:2px">PLUVIÔMETRO</h2>
+    <p style="color:var(--accent);font-size:12px;margin:6px 0 20px;">Carregando dados...</p>
+    <p style="color:#333;font-size:10px;margin:0;">Desenvolvido por Joao Divino Barbosa &#174; 2026</p>
+</div>
+
+<!-- Install Banner -->
+<div id="installBanner">
+    <span>📲 Instale o app para acesso rápido!</span>
+    <button id="btnInstall" onclick="installApp()">Instalar</button>
+    <button id="btnDismiss" onclick="dismissInstall()">✕</button>
+</div>
+
+<!-- Offline Banner -->
+<div id="offlineBanner">⚡ Sem conexão — exibindo dados em cache</div>
+
+<header>
+    <h2>🌦️ MONITORAMENTO AGRÍCOLA</h2>
+    <small>Desenvolvido por Joao Divino Barbosa &#174; 2026</small>
+</header>
+
+<div class="container">
+    <div class="card">
+        <div class="nome-fazenda-group">
+            <div><label>UNIDADE 1</label><input type="text" id="nomeFazenda1" value="Rio da Vida"></div>
+            <div><label>UNIDADE 2</label><input type="text" id="nomeFazenda2" value="Bacabal"></div>
+        </div>
+        <div class="farm-selector">
+            <button class="farm-btn active" id="btnFarm1" onclick="mudarFazenda('fazenda1')">Fazenda 1</button>
+            <button class="farm-btn" id="btnFarm2" onclick="mudarFazenda('fazenda2')">Fazenda 2</button>
+        </div>
+        <div class="input-group">
+            <input type="date" id="dataChuva">
+            <input type="number" id="valorChuva" placeholder="Chuva em mm" step="0.1">
+        </div>
+        <button class="btn-main" id="btnLancar" onclick="lancar()">SALVAR NO GOOGLE</button>
+
+        <!-- ALERTA DATA DUPLICADA -->
+        <div class="alerta-duplicado" id="alertaDuplicado">
+            <div class="alerta-icon">⚠️</div>
+            <div class="alerta-texto">
+                <div class="alerta-titulo">Dados já coletados nessa data!</div>
+                <div class="alerta-desc" id="alertaDescData"></div>
+                <div class="alerta-valor" id="alertaValorExistente"></div>
+            </div>
+            <button class="btn-substituir" onclick="substituir()">Substituir</button>
+        </div>
+
+        <div class="btn-group">
+            <button style="background:#9c27b0" onclick="exportarPDF()">📄 PDF</button>
+            <button style="background:#1e5a8a" onclick="exportarDados()">📥 EXPORTAR</button>
+            <button style="background:#9e3a2c" onclick="limparTudo()">🗑️ LIMPAR</button>
+        </div>
+    </div>
+
+    <!-- Gráfico Diário -->
+    <div class="card">
+        <h3>📈 <span id="labelDiario">Evolução</span> (Mês Atual)</h3>
+        <div class="stats-row">
+            <div class="stat-box"><small>Total Acumulado</small><b id="totalMes">0 mm</b></div>
+            <div class="stat-box"><small>Maior Evento</small><b id="picoMes">0 mm</b></div>
+        </div>
+        <canvas id="chartDiario"></canvas>
+    </div>
+
+    <!-- Gráfico Mensal com estatísticas extras -->
+    <div class="card">
+        <h3>📅 Acumulado por Mês</h3>
+        <div class="stats-row-4">
+            <div class="stat-box mini">
+                <small>☔ Menor Chuva</small>
+                <b id="menorChuvaLabel" style="color:#81d4fa;font-size:13px">—</b>
+                <b id="menorChuvaValor" style="color:#81d4fa">— mm</b>
+            </div>
+            <div class="stat-box mini">
+                <small>🌊 Maior Chuva</small>
+                <b id="maiorChuvaLabel" style="color:#ff7043;font-size:13px">—</b>
+                <b id="maiorChuvaValor" style="color:#ff7043">— mm</b>
+            </div>
+            <div class="stat-box mini">
+                <small>🗓️ Dias com Chuva</small>
+                <b id="diasChuvaMes" style="color:#ffd54f">0</b>
+            </div>
+            <div class="stat-box mini">
+                <small>📊 Média Diária</small>
+                <b id="mediaDiariaMes" style="color:#ce93d8">0 mm</b>
+            </div>
+        </div>
+        <canvas id="chartMensal"></canvas>
+    </div>
+
+    <!-- Comparativo -->
+    <div class="card">
+        <h3>📊 Comparativo entre Áreas</h3>
+        <select id="anoSelect" onchange="atualizarUI()" style="width:100%;background:#0c1a0c;color:white;padding:10px;border:1px solid #2a4b2a;border-radius:12px;margin-bottom:15px;"></select>
+        <canvas id="chartComp"></canvas>
+    </div>
+
+    <footer>Joao Divino Barbosa &#174; 2026 &nbsp;|&nbsp; PWA v1.2</footer>
+</div>
+
+<script type="module">
+// ── FIREBASE ──────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc,
+         query, orderBy, setDoc, getDoc }
+    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDHmAxPRs-fwn8K-QBoOYAi2auZJlVN4H4",
+    authDomain: "fazenda-sitio-novo.firebaseapp.com",
+    projectId: "fazenda-sitio-novo",
+    storageBucket: "fazenda-sitio-novo.firebasestorage.app",
+    messagingSenderId: "91070055656",
+    appId: "1:91070055656:web:d797c9d477897922d1755d"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db    = getFirestore(fbApp);
+
+const COL_F1    = "chuvas_unidade1";
+const COL_F2    = "chuvas_unidade2";
+const DOC_NOMES = "config/nomes_fazendas";
+
+// ── ESTADO ────────────────────────────────────────────────────
+Chart.register(ChartDataLabels);
+let currentFarm = 'fazenda1';
+let charts      = {};
+let dadosF1     = [];
+let dadosF2     = [];
+const mesesAbr  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const mesesNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+// ── PWA INSTALL ───────────────────────────────────────────────
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (!localStorage.getItem('installDismissed')) {
+        document.getElementById('installBanner').classList.add('show');
+    }
+});
+window.addEventListener('appinstalled', () => {
+    document.getElementById('installBanner').classList.remove('show');
+    deferredPrompt = null;
+});
+window.installApp = async function() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') document.getElementById('installBanner').classList.remove('show');
+    deferredPrompt = null;
+};
+window.dismissInstall = function() {
+    document.getElementById('installBanner').classList.remove('show');
+    localStorage.setItem('installDismissed', '1');
+};
+
+// ── OFFLINE DETECTION ─────────────────────────────────────────
+window.addEventListener('online',  () => document.getElementById('offlineBanner').classList.remove('show'));
+window.addEventListener('offline', () => document.getElementById('offlineBanner').classList.add('show'));
+if (!navigator.onLine) document.getElementById('offlineBanner').classList.add('show');
+
+// ── INIT ──────────────────────────────────────────────────────
+window.onload = async () => {
+    document.getElementById('dataChuva').valueAsDate = new Date();
+    povoarAnos();
+    await carregarNomesFirebase();
+    await carregarTodosDados();
+    atualizarUI();
+    setTimeout(() => document.getElementById('splash').style.display = 'none', 800);
+};
+
+// ── NOMES DAS FAZENDAS ────────────────────────────────────────
+async function carregarNomesFirebase() {
+    try {
+        const snap = await getDoc(doc(db, "config", "nomes_fazendas"));
+        if (snap.exists()) {
+            const n = snap.data();
+            document.getElementById('nomeFazenda1').value = n.fazenda1 || 'Rio da Vida';
+            document.getElementById('nomeFazenda2').value = n.fazenda2 || 'Bacabal';
+            atualizarLabelsBotoes(n);
+        }
+    } catch (e) { console.warn("Sem nomes no Firebase, usando padrão."); }
+}
+function getNomes() {
+    return {
+        fazenda1: document.getElementById('nomeFazenda1').value.trim() || 'Rio da Vida',
+        fazenda2: document.getElementById('nomeFazenda2').value.trim() || 'Bacabal'
+    };
+}
+function atualizarLabelsBotoes(n) {
+    document.getElementById('btnFarm1').textContent = n.fazenda1 || 'Fazenda 1';
+    document.getElementById('btnFarm2').textContent = n.fazenda2 || 'Fazenda 2';
+}
+document.getElementById('nomeFazenda1').addEventListener('blur', salvarNomesFirebase);
+document.getElementById('nomeFazenda2').addEventListener('blur', salvarNomesFirebase);
+async function salvarNomesFirebase() {
+    const n = getNomes();
+    atualizarLabelsBotoes(n);
+    try { await setDoc(doc(db, "config", "nomes_fazendas"), n); }
+    catch (e) { console.warn("Erro ao salvar nomes:", e); }
+}
+
+// ── CARREGAR DADOS DO FIREBASE ────────────────────────────────
+async function carregarTodosDados() {
+    try {
+        const [snapF1, snapF2] = await Promise.all([
+            getDocs(query(collection(db, COL_F1), orderBy('data', 'asc'))),
+            getDocs(query(collection(db, COL_F2), orderBy('data', 'asc')))
+        ]);
+        dadosF1 = snapF1.docs.map(d => ({ id: d.id, ...d.data() }));
+        dadosF2 = snapF2.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) { alert("Erro ao carregar dados do Firebase: " + e.message); }
+}
+
+// ── MUDAR FAZENDA ─────────────────────────────────────────────
+window.mudarFazenda = (f) => {
+    currentFarm = f;
+    document.getElementById('btnFarm1').classList.toggle('active', f === 'fazenda1');
+    document.getElementById('btnFarm2').classList.toggle('active', f === 'fazenda2');
+    ocultarAlerta();
+    atualizarUI();
+};
+
+// ── VALIDAÇÃO DUPLICADA ───────────────────────────────────────
+function ocultarAlerta() { document.getElementById('alertaDuplicado').classList.remove('show'); }
+function checarDuplicado(data) {
+    const dados = currentFarm === 'fazenda1' ? dadosF1 : dadosF2;
+    return dados.find(r => r.data === data) || null;
+}
+document.getElementById('dataChuva').addEventListener('change', ocultarAlerta);
+document.getElementById('valorChuva').addEventListener('input', ocultarAlerta);
+
+// ── LANÇAR ────────────────────────────────────────────────────
+window.lancar = async function() {
+    const dataInput = document.getElementById('dataChuva').value;
+    const valor     = parseFloat(document.getElementById('valorChuva').value);
+    if (!dataInput || isNaN(valor) || valor < 0) return alert("Preencha data e valor válidos.");
+    ocultarAlerta();
+    const existente = checarDuplicado(dataInput);
+    if (existente) {
+        const dataFmt = dataInput.split('-').reverse().join('/');
+        document.getElementById('alertaDescData').textContent = `Registro de ${dataFmt} já existe.`;
+        document.getElementById('alertaValorExistente').textContent = `Valor registrado: ${existente.valor.toFixed(1)} mm`;
+        document.getElementById('alertaDuplicado').dataset.idExistente = existente.id;
+        document.getElementById('alertaDuplicado').dataset.dataInput   = dataInput;
+        document.getElementById('alertaDuplicado').dataset.valor       = valor;
+        document.getElementById('alertaDuplicado').classList.add('show');
+        return;
+    }
+    await salvarRegistro(dataInput, valor);
+};
+
+async function salvarRegistro(dataInput, valor) {
+    const btn = document.getElementById('btnLancar');
+    btn.textContent = "SALVANDO..."; btn.disabled = true;
+    const col = currentFarm === 'fazenda1' ? COL_F1 : COL_F2;
+    const nomeAtual = getNomes()[currentFarm];
+    try {
+        const novoDoc = await addDoc(collection(db, col), {
+            data: dataInput, valor, fazenda: nomeAtual, criadoEm: new Date().toISOString()
+        });
+        const novo = { id: novoDoc.id, data: dataInput, valor, fazenda: nomeAtual };
+        if (currentFarm === 'fazenda1') dadosF1.push(novo); else dadosF2.push(novo);
+        document.getElementById('valorChuva').value = '';
+        ocultarAlerta();
+        atualizarUI();
+    } catch (e) { alert("Erro ao salvar: " + e.message); }
+    btn.textContent = "SALVAR NO GOOGLE"; btn.disabled = false;
+}
+
+// ── SUBSTITUIR ────────────────────────────────────────────────
+window.substituir = async function() {
+    const alerta  = document.getElementById('alertaDuplicado');
+    const idAntigo = alerta.dataset.idExistente;
+    const dataInput = alerta.dataset.dataInput;
+    const valor     = parseFloat(alerta.dataset.valor);
+    const col       = currentFarm === 'fazenda1' ? COL_F1 : COL_F2;
+    const dataFmt   = dataInput.split('-').reverse().join('/');
+    if (!confirm(`Substituir o registro de ${dataFmt}?\nIsso afeta todos os usuários.`)) return;
+    try {
+        await deleteDoc(doc(db, col, idAntigo));
+        if (currentFarm === 'fazenda1') dadosF1 = dadosF1.filter(r => r.id !== idAntigo);
+        else dadosF2 = dadosF2.filter(r => r.id !== idAntigo);
+        await salvarRegistro(dataInput, valor);
+    } catch (e) { alert("Erro ao substituir: " + e.message); }
+};
+
+// ── CALCULAR ESTATÍSTICAS MENSAIS ─────────────────────────────
+function calcularEstatisticasMensais(dados, ano) {
+    // Para cada mês: total, dias com chuva, min dia, max dia
+    const stats = Array(12).fill(null).map(() => ({
+        total: 0, dias: 0, minDia: Infinity, maxDia: -Infinity, registros: []
+    }));
+    dados.forEach(d => {
+        const p = d.data.split('-');
+        if (parseInt(p[0]) === ano) {
+            const m = parseInt(p[1]) - 1;
+            stats[m].total += d.valor;
+            stats[m].registros.push(d.valor);
+            if (d.valor > 0) stats[m].dias++;
+            if (d.valor > stats[m].maxDia) stats[m].maxDia = d.valor;
+            if (d.valor < stats[m].minDia && d.valor > 0) stats[m].minDia = d.valor;
+        }
+    });
+    // Normalizar infinitos
+    stats.forEach(s => {
+        if (s.minDia === Infinity) s.minDia = 0;
+        if (s.maxDia === -Infinity) s.maxDia = 0;
+    });
+    return stats;
+}
+
+// ── RENDERIZAR UI ─────────────────────────────────────────────
+window.atualizarUI = function() {
+    const nomes  = getNomes();
+    const anoSel = parseInt(document.getElementById('anoSelect').value) || new Date().getFullYear();
+    const hoje   = new Date();
+    const mAtual = hoje.getMonth(), aAtual = hoje.getFullYear();
+    const diasNoMes   = new Date(aAtual, mAtual + 1, 0).getDate();
+    const labelsDias  = Array.from({length: diasNoMes}, (_, i) => i + 1);
+    const valoresDias = Array(diasNoMes).fill(0);
+    const dadosAtuais = currentFarm === 'fazenda1' ? dadosF1 : dadosF2;
+
+    let totalM = 0, picoM = 0;
+    dadosAtuais.forEach(d => {
+        const p = d.data.split('-');
+        if (parseInt(p[0]) === aAtual && (parseInt(p[1])-1) === mAtual) {
+            valoresDias[parseInt(p[2])-1] += d.valor;
+            totalM += d.valor;
+            if (d.valor > picoM) picoM = d.valor;
+        }
+    });
+    document.getElementById('totalMes').innerText = totalM.toFixed(1) + ' mm';
+    document.getElementById('picoMes').innerText  = picoM.toFixed(1) + ' mm';
+    renderChart('chartDiario','bar', labelsDias, [
+        { label:'mm', data: valoresDias, backgroundColor: valoresDias.map(v => v > 0 ? '#66bb6a' : '#1a331a') }
+    ]);
+
+    // Calcular estatísticas anuais por mês
+    const statsAtual = calcularEstatisticasMensais(dadosAtuais, anoSel);
+    const totaisMensais = statsAtual.map(s => s.total);
+    const diasMensais   = statsAtual.map(s => s.dias);
+
+    // Encontrar mês com menor e maior chuva (só meses com dados)
+    let idxMenor = -1, idxMaior = -1, minVal = Infinity, maxVal = -Infinity;
+    totaisMensais.forEach((v, i) => {
+        if (v > 0 && v < minVal) { minVal = v; idxMenor = i; }
+        if (v > maxVal) { maxVal = v; idxMaior = i; }
+    });
+
+    // Atualizar stats cards mensais
+    if (idxMenor >= 0) {
+        document.getElementById('menorChuvaLabel').innerText = mesesAbr[idxMenor];
+        document.getElementById('menorChuvaValor').innerText = minVal.toFixed(1) + ' mm';
+    }
+    if (idxMaior >= 0) {
+        document.getElementById('maiorChuvaLabel').innerText = mesesAbr[idxMaior];
+        document.getElementById('maiorChuvaValor').innerText = maxVal.toFixed(1) + ' mm';
+    }
+    // Dias com chuva no mês atual
+    const diasMesAtual = statsAtual[mAtual].dias;
+    document.getElementById('diasChuvaMes').innerText = diasMesAtual;
+    const mediaDiaria = diasMesAtual > 0 ? (statsAtual[mAtual].total / diasMesAtual) : 0;
+    document.getElementById('mediaDiariaMes').innerText = mediaDiaria.toFixed(1) + ' mm';
+
+    // Gráfico mensal com barras coloridas por quantidade
+    const maxMensal = Math.max(...totaisMensais, 1);
+    const coresMensal = totaisMensais.map((v, i) => {
+        if (i === idxMaior) return '#ff7043';
+        if (i === idxMenor && v > 0) return '#81d4fa';
+        const intensity = v / maxMensal;
+        const g = Math.round(100 + intensity * 87);
+        return `rgb(46,${g},50)`;
+    });
+
+    renderChart('chartMensal','bar', mesesAbr, [
+        { label:'Total mm', data: totaisMensais, backgroundColor: coresMensal,
+          borderColor: coresMensal.map(c => c), borderWidth: 1 }
+    ], true);
+
+    // Gráfico comparativo
+    const statsF1 = calcularEstatisticasMensais(dadosF1, anoSel);
+    const statsF2 = calcularEstatisticasMensais(dadosF2, anoSel);
+    const totF1 = statsF1.reduce((a, s) => a + s.total, 0);
+    const totF2 = statsF2.reduce((a, s) => a + s.total, 0);
+
+    renderChart('chartComp','line', mesesAbr, [
+        { label:`${nomes.fazenda1}: ${totF1.toFixed(0)}mm`, data: statsF1.map(s => s.total),
+          borderColor:'#66bb6a', backgroundColor:'#66bb6a33', tension:0.3, fill:true },
+        { label:`${nomes.fazenda2}: ${totF2.toFixed(0)}mm`, data: statsF2.map(s => s.total),
+          borderColor:'#b3e4ff', backgroundColor:'#b3e4ff33', tension:0.3, fill:true }
+    ]);
+};
+
+function renderChart(id, type, labels, datasets, showDays = false) {
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart(document.getElementById(id).getContext('2d'), {
+        type,
+        data: { labels, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: id === 'chartComp', labels: { color:'#fff' } },
+                datalabels: {
+                    anchor:'end', align:'top', color:'#fff', font:{size:10},
+                    formatter: v => v > 0 ? v.toFixed(0) : ''
+                }
+            },
+            scales: {
+                y: { ticks:{color:'#888'}, grid:{color:'#1a331a'} },
+                x: { ticks:{color:'#888'}, grid:{display:false} }
+            }
+        }
+    });
+}
+
+function povoarAnos() {
+    const s = document.getElementById('anoSelect'), ano = new Date().getFullYear();
+    for (let i = ano; i >= ano - 4; i--) {
+        const o = document.createElement('option'); o.value = i; o.text = 'Dados de ' + i; s.appendChild(o);
+    }
+}
+
+// ── EXPORTAR JSON ─────────────────────────────────────────────
+window.exportarDados = function() {
+    const nomes = getNomes();
+    const blob  = new Blob([JSON.stringify({ fazenda1: dadosF1, fazenda2: dadosF2, nomes }, null, 2)], { type:'application/json' });
+    const a     = document.createElement('a');
+    a.href      = URL.createObjectURL(blob);
+    a.download  = `backup_pluviometro_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+};
+
+// ── LIMPAR TUDO ───────────────────────────────────────────────
+window.limparTudo = async function() {
+    const col  = currentFarm === 'fazenda1' ? COL_F1 : COL_F2;
+    const nome = getNomes()[currentFarm];
+    if (!confirm(`Apagar TODOS os registros de "${nome}"?\nEssa ação afeta todos os usuários.`)) return;
+    try {
+        const dados = currentFarm === 'fazenda1' ? dadosF1 : dadosF2;
+        await Promise.all(dados.map(r => deleteDoc(doc(db, col, r.id))));
+        if (currentFarm === 'fazenda1') dadosF1 = []; else dadosF2 = [];
+        atualizarUI();
+        alert("Registros apagados.");
+    } catch (e) { alert("Erro ao limpar: " + e.message); }
+};
+
+// ── EXPORTAR PDF COMPLETO COM GRÁFICOS ───────────────────────
+window.exportarPDF = async function() {
+    const overlay = document.getElementById('pdfOverlay');
+    overlay.classList.add('show');
+
+    await new Promise(r => setTimeout(r, 100)); // allow UI update
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdfDoc    = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+        const nomes     = getNomes();
+        const ano       = parseInt(document.getElementById('anoSelect').value) || new Date().getFullYear();
+        const hoje      = new Date();
+        const pW = 210, mL = 15, mR = 15, cW = pW - mL - mR;
+
+        // ── PÁGINA 1: CABEÇALHO E RESUMO GERAL ──────────────────
+        // Header background
+        pdfDoc.setFillColor(14, 42, 14);
+        pdfDoc.rect(0, 0, pW, 45, 'F');
+        // Título
+        pdfDoc.setFontSize(20); pdfDoc.setTextColor(102,187,106); pdfDoc.setFont('helvetica','bold');
+        pdfDoc.text('PLUVIOMETRO AGRÍCOLA', pW/2, 16, {align:'center'});
+        pdfDoc.setFontSize(12); pdfDoc.setTextColor(255,255,255);
+        pdfDoc.text(`${nomes.fazenda1}  ×  ${nomes.fazenda2}`, pW/2, 27, {align:'center'});
+        pdfDoc.setFontSize(9); pdfDoc.setTextColor(150,200,150);
+        pdfDoc.text(`Relatório gerado em ${hoje.toLocaleDateString('pt-BR')} — Ano ${ano}`, pW/2, 36, {align:'center'});
+
+        let y = 52;
+
+        // ── PROCESSAR DADOS ──────────────────────────────────────
+        const processarFazenda = (dados) => {
+            const stats = calcularEstatisticasMensais(dados, ano);
+            const totais = stats.map(s => s.total);
+            const totalAno = totais.reduce((a,b)=>a+b,0);
+            const diasTotais = stats.reduce((a,s)=>a+s.dias,0);
+
+            let idxMin=-1, idxMax=-1, minV=Infinity, maxV=-Infinity;
+            totais.forEach((v,i) => {
+                if(v>0 && v<minV){minV=v;idxMin=i;}
+                if(v>maxV){maxV=v;idxMax=i;}
+            });
+
+            // Maior evento único do ano
+            let maiorEvento = 0, dataMaiorEvento = '';
+            dados.filter(d=>d.data.startsWith(ano)).forEach(d=>{
+                if(d.valor>maiorEvento){maiorEvento=d.valor;dataMaiorEvento=d.data.split('-').reverse().join('/');}
+            });
+
+            return { stats, totais, totalAno, diasTotais, idxMin, idxMax, minV, maxV, maiorEvento, dataMaiorEvento };
+        };
+
+        const resF1 = processarFazenda(dadosF1);
+        const resF2 = processarFazenda(dadosF2);
+
+        // ── FUNÇÃO: DESENHAR CARTÕES DE RESUMO ───────────────────
+        const drawResumoCard = (res, nome, xStart) => {
+            const cw2 = (cW/2) - 4;
+            pdfDoc.setFillColor(21,42,21);
+            pdfDoc.roundedRect(xStart, y, cw2, 48, 4, 4, 'F');
+            pdfDoc.setDrawColor(46,125,50);
+            pdfDoc.roundedRect(xStart, y, cw2, 48, 4, 4, 'S');
+
+            pdfDoc.setFontSize(9); pdfDoc.setTextColor(102,187,106); pdfDoc.setFont('helvetica','bold');
+            pdfDoc.text(nome.toUpperCase(), xStart+4, y+7);
+            pdfDoc.setTextColor(180,220,180); pdfDoc.setFont('helvetica','normal'); pdfDoc.setFontSize(8);
+
+            const rows = [
+                ['Total Anual', `${res.totalAno.toFixed(1)} mm`],
+                ['Dias com Chuva', `${res.diasTotais} dias`],
+                ['Mês com MENOS chuva', res.idxMin>=0 ? `${mesesNome[res.idxMin]} (${res.minV.toFixed(0)}mm)` : '—'],
+                ['Mês com MAIS chuva', res.idxMax>=0 ? `${mesesNome[res.idxMax]} (${res.maxV.toFixed(0)}mm)` : '—'],
+                ['Maior evento', res.maiorEvento>0 ? `${res.maiorEvento.toFixed(1)}mm em ${res.dataMaiorEvento}` : '—'],
+            ];
+            rows.forEach(([label, val], i) => {
+                const ry = y + 14 + i*7;
+                pdfDoc.setTextColor(150,180,150); pdfDoc.text(label+':', xStart+4, ry);
+                pdfDoc.setTextColor(220,240,220); pdfDoc.text(val, xStart+cw2-4, ry, {align:'right'});
+            });
+        };
+
+        // Título resumo
+        pdfDoc.setFontSize(11); pdfDoc.setTextColor(102,187,106); pdfDoc.setFont('helvetica','bold');
+        pdfDoc.text('RESUMO GERAL', mL, y-4);
+        drawResumoCard(resF1, nomes.fazenda1, mL);
+        drawResumoCard(resF2, nomes.fazenda2, mL + cW/2 + 4);
+        y += 56;
+
+        // ── TABELA: DIAS QUE CHOVEU POR MÊS ─────────────────────
+        pdfDoc.setFontSize(11); pdfDoc.setTextColor(102,187,106); pdfDoc.setFont('helvetica','bold');
+        pdfDoc.text('DIAS COM CHUVA POR MÊS', mL, y);
+        y += 6;
+
+        // Header tabela
+        pdfDoc.setFillColor(46,125,50);
+        pdfDoc.rect(mL, y, cW, 8, 'F');
+        pdfDoc.setTextColor(255,255,255); pdfDoc.setFontSize(8); pdfDoc.setFont('helvetica','bold');
+        const cols = [mL+3, mL+38, mL+72, mL+106, mL+130, mL+155];
+        ['Mês','Total F1 (mm)','Dias F1','Total F2 (mm)','Dias F2','Diferença'].forEach((h,i) => {
+            pdfDoc.text(h, cols[i], y+5.5);
+        });
+        y += 8;
+
+        pdfDoc.setFont('helvetica','normal');
+        mesesNome.forEach((mes, idx) => {
+            if (y > 272) { pdfDoc.addPage(); y = 20; }
+            const s1 = resF1.stats[idx], s2 = resF2.stats[idx];
+            const diff = s1.total - s2.total;
+            const isMin1 = idx === resF1.idxMin, isMax1 = idx === resF1.idxMax;
+            const isMin2 = idx === resF2.idxMin, isMax2 = idx === resF2.idxMax;
+
+            // Row background
+            if (idx % 2 === 0) { pdfDoc.setFillColor(21,42,21); pdfDoc.rect(mL, y, cW, 8, 'F'); }
+            // Highlight min/max
+            if (isMax1 || isMax2) { pdfDoc.setFillColor(100,30,20); pdfDoc.rect(mL, y, cW, 8, 'F'); }
+            if (isMin1 || isMin2) { pdfDoc.setFillColor(20,50,80); pdfDoc.rect(mL, y, cW, 8, 'F'); }
+
+            pdfDoc.setTextColor(200,220,200); pdfDoc.setFontSize(8);
+            pdfDoc.text(mes, cols[0], y+5.5);
+
+            // F1 total
+            if (isMax1) pdfDoc.setTextColor(255,120,80);
+            else if (isMin1) pdfDoc.setTextColor(130,200,255);
+            else pdfDoc.setTextColor(200,220,200);
+            pdfDoc.text(s1.total > 0 ? s1.total.toFixed(1) : '—', cols[1], y+5.5);
+            pdfDoc.setTextColor(200,220,200);
+            pdfDoc.text(s1.dias > 0 ? String(s1.dias) : '—', cols[2], y+5.5);
+
+            // F2 total
+            if (isMax2) pdfDoc.setTextColor(255,120,80);
+            else if (isMin2) pdfDoc.setTextColor(130,200,255);
+            else pdfDoc.setTextColor(200,220,200);
+            pdfDoc.text(s2.total > 0 ? s2.total.toFixed(1) : '—', cols[3], y+5.5);
+            pdfDoc.setTextColor(200,220,200);
+            pdfDoc.text(s2.dias > 0 ? String(s2.dias) : '—', cols[4], y+5.5);
+
+            // Diferença
+            if (diff > 0) pdfDoc.setTextColor(102,187,106);
+            else if (diff < 0) pdfDoc.setTextColor(255,120,80);
+            else pdfDoc.setTextColor(150,150,150);
+            pdfDoc.text(diff !== 0 ? (diff > 0 ? '+' : '') + diff.toFixed(1) : '=', cols[5], y+5.5);
+
+            y += 8;
+        });
+
+        // Totais
+        pdfDoc.setFillColor(46,125,50);
+        pdfDoc.rect(mL, y, cW, 9, 'F');
+        pdfDoc.setTextColor(255,255,255); pdfDoc.setFont('helvetica','bold'); pdfDoc.setFontSize(8.5);
+        pdfDoc.text('TOTAL ANUAL', cols[0], y+6);
+        pdfDoc.text(resF1.totalAno.toFixed(1), cols[1], y+6);
+        pdfDoc.text(String(resF1.diasTotais) + ' dias', cols[2], y+6);
+        pdfDoc.text(resF2.totalAno.toFixed(1), cols[3], y+6);
+        pdfDoc.text(String(resF2.diasTotais) + ' dias', cols[4], y+6);
+        y += 16;
+
+        // Legenda cores
+        pdfDoc.setFont('helvetica','normal'); pdfDoc.setFontSize(7.5);
+        pdfDoc.setFillColor(100,30,20); pdfDoc.rect(mL, y, 4, 4, 'F');
+        pdfDoc.setTextColor(200,180,180); pdfDoc.text('Mês com MAIS chuva', mL+6, y+3.5);
+        pdfDoc.setFillColor(20,50,80); pdfDoc.rect(mL+60, y, 4, 4, 'F');
+        pdfDoc.setTextColor(150,180,220); pdfDoc.text('Mês com MENOS chuva', mL+66, y+3.5);
+        y += 14;
+
+        // ── RODAPÉ ─────────────────────────────────────────────
+        pdfDoc.setFontSize(7); pdfDoc.setTextColor(80,100,80); pdfDoc.setFont('helvetica','normal');
+        pdfDoc.text(`Pluviômetro Agrícola — Joao Divino Barbosa © 2026 — Pág. 1/1`, pW/2, 293, {align:'center'});
+
+        pdfDoc.save(`pluviometro_resumo_${ano}.pdf`);
+
+
+    } catch(e) {
+        alert("Erro ao gerar PDF: " + e.message);
+        console.error(e);
+    }
+    overlay.classList.remove('show');
+};
+
+// Exporta função de estatísticas para uso global no PDF
+window.calcularEstatisticasMensais = calcularEstatisticasMensais;
+window.mesesNome = mesesNome;
+window.dadosF1Ref = () => dadosF1;
+window.dadosF2Ref = () => dadosF2;
+</script>
+
+<!-- PWA Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('SW registrado:', reg.scope))
+            .catch(err => console.warn('SW falhou:', err));
+    });
+}
+</script>
+</body>
+</html>
