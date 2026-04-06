@@ -2,7 +2,7 @@
   "name": "Pluviômetro Agrícola",
   "short_name": "Pluviômetro",
   "description": "Monitoramento de chuvas para fazendas",
-  "start_url": "./index.html",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#0a1a0a",
   "theme_color": "#2e7d32",
